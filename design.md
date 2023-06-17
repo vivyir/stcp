@@ -60,7 +60,7 @@ Passwords in the credentials database will be saved as hashes of [themselves wit
 This command engine will have type annotations and some examples are shown from the "More commands" section of this text file
 
 ##### Example
-we have the command `
+We have the command
 
     /tempmute <user: User> <duration: Time> [reason: Text]
 You can either feed a command arguments by the order that is stated:
@@ -112,9 +112,9 @@ For example, the user can be manipulated like so:
 In the user database, for each user there will be a "permissions" node which is a minecraft-like permission list. For example: (YAML example, we might switch to another ML language)
 ```yaml
 82cfc07d-66a7-48cb-bb66-90b4066613e3:
-		username: "spixa"
-		password: "538b2144d7f55b7aee400550f2dd79a1fb3d80b3e06527c3bb0d09373423545d"
-		salt: "A32CBFASJ7KA"
+	username: "spixa"
+	password: "538b2144d7f55b7aee400550f2dd79a1fb3d80b3e06527c3bb0d09373423545d"
+	salt: "A32CBFASJ7KA"
         permissions:
             core.basic.msg.*
             core.basic.help.*
