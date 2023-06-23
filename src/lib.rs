@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, ErrorKind};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 
@@ -30,6 +30,7 @@ impl AesPacket {
         let nonce = rand::random::<[u8; 12]>();
         let ciphertext = cipher.encrypt(&Nonce::from(nonce), &data[..]).unwrap();
         AesPacket {
+            // NOTE: safe unwrap
             nonce: nonce.as_slice()[..12].try_into().unwrap(),
             ciphertext,
         }
@@ -99,14 +100,18 @@ impl StcpServer {
         })
     }
 
-    pub fn kex_with_stream(&self, stream: &mut TcpStream) -> Aes256Gcm {
+    pub fn kex_with_stream(&self, stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
         // send serialized public key
         let ser_pubkey = &bincode::serialize(&self.rsa_public_key).unwrap()[..];
-        stream.write_all(ser_pubkey).unwrap();
+        stream.write_all(ser_pubkey)?;
 
         // get encrypted aes key
         let mut enc_aes_key = [0_u8; 512];
-        stream.read_exact(&mut enc_aes_key).unwrap();
+        while let Err(err) = stream.read_exact(&mut enc_aes_key) {
+            if !(err.kind() == ErrorKind::WouldBlock) {
+                return Err(err);
+            }
+        }
 
         // decrypt aes key
         let aes_key;
@@ -120,14 +125,14 @@ impl StcpServer {
             aes_key = GenericArray::from_slice(&ser_aes_key[..]).to_owned();
         }
 
-        Aes256Gcm::new(&aes_key)
+        Ok(Aes256Gcm::new(&aes_key))
     }
 }
 
-pub fn client_kex(stream: &mut TcpStream) -> Aes256Gcm {
+pub fn client_kex(stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
     // get serialized public key
     let mut ser_pubkey = [0_u8; 532];
-    stream.read_exact(&mut ser_pubkey).unwrap();
+    stream.read_exact(&mut ser_pubkey)?;
 
     // deserialize pubkey
     let pubkey = bincode::deserialize::<RsaPublicKey>(&ser_pubkey[..]).unwrap();
@@ -143,7 +148,7 @@ pub fn client_kex(stream: &mut TcpStream) -> Aes256Gcm {
         .expect("encryption failed");
 
     // send encrypted aes key
-    stream.write_all(&encrypted_aes_key[..]).unwrap();
+    stream.write_all(&encrypted_aes_key[..])?;
 
-    Aes256Gcm::new(&aes_key)
+    Ok(Aes256Gcm::new(&aes_key))
 }
