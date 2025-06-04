@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write, ErrorKind};
+use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 
@@ -98,34 +98,6 @@ impl StcpServer {
             rsa_public_key: pubkey,
             listener,
         })
-    }
-
-    pub fn kex_with_stream(&self, stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
-        // send serialized public key
-        let ser_pubkey = &bincode::serialize(&self.rsa_public_key).unwrap()[..];
-        stream.write_all(ser_pubkey)?;
-
-        // get encrypted aes key
-        let mut enc_aes_key = [0_u8; 512];
-        while let Err(err) = stream.read_exact(&mut enc_aes_key) {
-            if !(err.kind() == ErrorKind::WouldBlock) {
-                return Err(err);
-            }
-        }
-
-        // decrypt aes key
-        let aes_key;
-        {
-            let hpk = self.rsa_private_key.lock().unwrap();
-            let rsa_privkey = bincode::deserialize::<RsaPrivateKey>(&(*hpk)[..]).unwrap();
-            let padding = PaddingScheme::new_pkcs1v15_encrypt();
-            let ser_aes_key = rsa_privkey
-                .decrypt(padding, &enc_aes_key[..])
-                .expect("failed decryption");
-            aes_key = GenericArray::from_slice(&ser_aes_key[..]).to_owned();
-        }
-
-        Ok(Aes256Gcm::new(&aes_key))
     }
 
     pub fn kex_with_stream(&self, stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
