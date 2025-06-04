@@ -127,6 +127,30 @@ impl StcpServer {
 
         Ok(Aes256Gcm::new(&aes_key))
     }
+
+    pub fn kex_with_stream(&self, stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
+        // send serialized public key
+        let ser_pubkey = &bincode::serialize(&self.rsa_public_key).unwrap()[..];
+        stream.write_all(ser_pubkey)?;
+
+        // get encrypted aes key
+        let mut enc_aes_key = [0_u8; 512];
+        stream.read_exact(&mut enc_aes_key)?;
+
+        // decrypt aes key
+        let aes_key = {
+            let hpk = self.rsa_private_key.lock().unwrap();
+            let rsa_privkey = bincode::deserialize::<RsaPrivateKey>(&(*hpk)[..])
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let padding = PaddingScheme::new_pkcs1v15_encrypt();
+            let ser_aes_key = rsa_privkey
+                .decrypt(padding, &enc_aes_key[..])
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            GenericArray::from_slice(&ser_aes_key[..]).to_owned()
+        };
+
+        Ok(Aes256Gcm::new(&aes_key))
+    }
 }
 
 pub fn client_kex(stream: &mut TcpStream) -> io::Result<Aes256Gcm> {
